@@ -1,4 +1,4 @@
-# 创建 S2I 的构建器镜像与构建模版
+# 创建 S2I 的构建器镜像与构建器模版
 
 S2I使用源代码和构建器镜像生成新的Docker镜像，在我们的项目当中提供了部分常用的构建器镜像，例如[Python](https://github.com/kubesphere/s2i-python-container/)、[Java](https://github.com/kubesphere/s2i-java-container/)，您也可以定义自己的构建器镜像扩展S2i。
 
@@ -63,6 +63,7 @@ LABEL io.k8s.description="Nginx Webserver" \
 # 安装nginx并且清理yum cache
 RUN yum install -y epel-release && \
     yum install -y --setopt=tsflags=nodocs nginx && \
+    yum clean all
 
 # 修改nginx的默认开放端口
 RUN sed -i 's/80/8080/' /etc/nginx/nginx.conf
@@ -138,3 +139,101 @@ and see the test via http://localhost:8080
 EOF
 ```
 
+## 第四步 构建与运行
+
+当我们完成了`Dockerfile`和S2I的脚本，我们现在修改一下`Makefile当中的镜像名称`:
+```makefile
+IMAGE_NAME = kubespheredev/nginx-centos7-s2ibuilder-sample
+
+.PHONY: build
+build:
+	docker build -t $(IMAGE_NAME) .
+
+.PHONY: test
+test:
+	docker build -t $(IMAGE_NAME)-candidate .
+	IMAGE_NAME=$(IMAGE_NAME)-candidate test/run
+
+```
+可以执行`make build`命令来构建我们的构建器镜像了。
+
+```bash
+$ make build
+docker build -t kubespheredev/nginx-centos7-s2ibuilder-sample .
+Sending build context to Docker daemon  164.9kB
+Step 1/17 : FROM kubespheredev/s2i-base-centos7:1
+ ---> 48f8574c05df
+Step 2/17 : LABEL maintainer="Runze Xia <runzexia@yunify.com>"
+ ---> Using cache
+ ---> d60ebf231518
+Step 3/17 : ENV NGINX_VERSION=1.6.3
+ ---> Using cache
+ ---> 5bd34674d1eb
+Step 4/17 : LABEL io.k8s.description="Nginx Webserver"       io.k8s.display-name="Nginx 1.6.3"       io.kubesphere.expose-services="8080:http"       io.kubesphere.tags="builder,nginx,html"
+ ---> Using cache
+ ---> c837ad649086
+Step 5/17 : RUN yum install -y epel-release &&     yum install -y --setopt=tsflags=nodocs nginx &&     yum clean all
+ ---> Running in d2c8fe644415
+
+…………
+…………
+…………
+
+Step 17/17 : CMD ["/usr/libexec/s2i/usage"]
+ ---> Running in c24819f6be27
+Removing intermediate container c24819f6be27
+ ---> c147c86f2cb8
+Successfully built c147c86f2cb8
+Successfully tagged kubespheredev/nginx-centos7-s2ibuilder-sample:latest
+```
+
+可以看到我们的镜像已经构建成功了，现在我们执行 `s2i build ./test/test-app kubespheredev/nginx-centos7-s2ibuilder-sample:latest sample app` 命令来构建我们的应用镜像。
+
+```bash
+$ s2i build ./test/test-app kubespheredev/nginx-centos7-s2ibuilder-sample:latest sample-app
+---> Building and installing application from source...
+Build completed successfully
+```
+
+当我们完成了应用镜像的构建，我们可以在本地运行这个应用镜像看构建出的应用是否符合我们的要求：
+
+```bash
+$ docker run -p 8080:8080  sample-app
+```
+
+在浏览器中访问可以看到我们的网页已经可以正常访问了:
+![Hello-World](images/hello-world.jpg)
+
+
+## 第五步 推送镜像并添加 KubeSphere 构建器模版
+
+当我们在本地完成S2I构建器镜像的测试之后，就可以推送镜像到镜像仓库当中，并创建构建器模版`yaml`文件：
+
+```yaml
+apiVersion: devops.kubesphere.io/v1alpha1
+kind: S2iBuilderTemplate
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: nginx-demo
+spec:
+  baseImages: # 构建器镜像名称，同一代码框架的多个不同版本。
+    - kubespheredev/nginx-centos7-s2ibuilder-sample
+  codeFramework: nginx # 代码框架类型
+  defaultBaseImage: kubespheredev/nginx-centos7-s2ibuilder-sample # 默认使用的构建器镜像
+  version: 0.0.1 # 构建器模版的版本
+  description: "This is a S2I builder template for Nginx builds whose result can be run directly without any further application server.." # 构建器模版的描述信息
+
+```
+
+在创建好构建器模版后我们可以使用 `kubectl` 将构建器模版提交到KubeSphere环境当中：
+```bash
+$ kubectl apply -f s2ibuildertemplate.yaml
+s2ibuildertemplate.devops.kubesphere.io/nginx created
+```
+
+现在我们来到KubeSphere的控制台界面，我们已经可以选择添加的构建器模版了：
+
+![Hello-World](images/s2i-in-dashborad.jpg)
+
+至此我们就完成了S2I构建器镜像与构建器模版的创建。

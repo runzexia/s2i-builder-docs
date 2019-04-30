@@ -1,4 +1,4 @@
-IMAGE_NAME = nginx-centos7
+IMAGE_NAME = kubespheredev/nginx-centos7-s2ibuilder-sample
 
 .PHONY: build
 build:

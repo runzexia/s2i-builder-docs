@@ -17,6 +17,7 @@ LABEL io.k8s.description="Nginx Webserver" \
 # Install the nginx web server package and clean the yum cache
 RUN yum install -y epel-release && \
     yum install -y --setopt=tsflags=nodocs nginx && \
+    yum clean all
 
 # Change the default port for nginx
 # Required if you plan on running images as a non-root user).

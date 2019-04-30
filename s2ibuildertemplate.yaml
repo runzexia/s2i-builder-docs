@@ -1,0 +1,13 @@
+apiVersion: devops.kubesphere.io/v1alpha1
+kind: S2iBuilderTemplate
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: nginx-demo
+spec:
+  baseImages: # 构建器镜像名称，同一代码框架的多个不同版本。
+    - kubespheredev/nginx-centos7-s2ibuilder-sample
+  codeFramework: nginx # 代码框架类型
+  defaultBaseImage: kubespheredev/nginx-centos7-s2ibuilder-sample # 默认使用的构建器镜像
+  version: 0.0.1 # 构建器模版的版本
+  description: "This is a S2I builder template for Nginx builds whose result can be run directly without any further application server.." # 构建器模版的描述信息
